@@ -138,7 +138,7 @@ export default function App() {
       <main>
         <header className="topbar">
           <GameDie />
-          <div><p className="eyebrow">Asociación de Juegos de Mesa</p><h1>{tab === 'list' ? 'Próximas partidas' : 'Nueva partida'}</h1></div>
+          <div><p className="eyebrow">Asociación Ludocuir</p><h1>{tab === 'list' ? 'Próximas partidas' : 'Nueva partida'}</h1></div>
         </header>
 
         {tab === 'new' && <NewSession onCreate={(s) => { setSessions((ss) => [...ss, s]); go('list'); }} />}
@@ -161,8 +161,6 @@ export default function App() {
             </ul>
           </section>
         )}
-
-        <footer>Datos de juegos de <a href="https://boardgamegeek.com" target="_blank" rel="noreferrer">BoardGameGeek</a></footer>
       </main>
 
       <nav className="tabbar" aria-label="Navegación principal">
