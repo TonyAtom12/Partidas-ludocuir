@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { supabase } from './supabase.js';
 
-const KEY = 'partidas:v1';
-const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch { return []; } };
 
 function GameSearch({ onPick }) {
   const [q, setQ] = useState('');
@@ -54,7 +53,7 @@ function NewSession({ onCreate }) {
 
   const submit = (e) => {
     e.preventDefault();
-    onCreate({ id: crypto.randomUUID(), game, ...f, max: Number(f.max), players: [f.host.trim()] });
+    onCreate({ game, ...f, host: f.host.trim(), max: Number(f.max), players: [f.host.trim()] });
     setGame(null); setF({ date: '', time: '', place: '', max: 4, host: '' });
   };
 
@@ -125,13 +124,58 @@ const PlusIcon = () => (
 );
 
 export default function App() {
-  const [sessions, setSessions] = useState(load);
+  const [sessions, setSessions] = useState([]);
+  const [status, setStatus] = useState('loading');
+  const [err, setErr] = useState('');
   const [tab, setTab] = useState('list');
-  useEffect(() => { try { localStorage.setItem(KEY, JSON.stringify(sessions)); } catch {} }, [sessions]);
 
-  const upd = (id, fn) => setSessions((ss) => ss.map((s) => (s.id === id ? fn(s) : s)));
+  const refresh = useCallback(async () => {
+    const { data, error } = await supabase.from('partidas').select('*, apuntados(id, name, created_at)').order('date').order('time');
+    if (error) { setStatus('error'); return; }
+    setSessions(data.map((r) => ({
+      id: r.id, game: r.game, date: r.date, time: r.time.slice(0, 5), place: r.place, max: r.max, host: r.host,
+      players: (r.apuntados || []).sort((a, b) => a.created_at.localeCompare(b.created_at)).map((a) => a.name),
+    })));
+    setStatus('ok');
+  }, []);
+
+  useEffect(() => {
+    refresh();
+    const ch = supabase.channel('cambios').on('postgres_changes', { event: '*', schema: 'public' }, refresh).subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [refresh]);
+
   const sorted = [...sessions].sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`));
   const go = (t) => { setTab(t); window.scrollTo({ top: 0 }); };
+
+  async function create(s) {
+    setErr('');
+    const { data, error } = await supabase.from('partidas')
+      .insert({ game: s.game, date: s.date, time: s.time, place: s.place, max: s.max, host: s.host }).select('id').single();
+    if (error) return setErr('No se pudo crear la partida. Inténtalo de nuevo.');
+    const r = await supabase.from('apuntados').insert({ partida_id: data.id, name: s.players[0] });
+    if (r.error) setErr('La partida se creó, pero no se pudo apuntar al creador.');
+    await refresh();
+    go('list');
+  }
+  async function join(id, name) {
+    setErr('');
+    const { error } = await supabase.from('apuntados').insert({ partida_id: id, name });
+    if (error) setErr(error.message.includes('partida_completa') ? 'La partida se acaba de llenar.' : error.code === '23505' ? 'Ya estás apuntado/a.' : 'No se pudo apuntar. Inténtalo de nuevo.');
+    refresh();
+  }
+  async function leave(id, name) {
+    setErr('');
+    const { error } = await supabase.from('apuntados').delete().eq('partida_id', id).eq('name', name);
+    if (error) setErr('No se pudo quitar. Inténtalo de nuevo.');
+    refresh();
+  }
+  async function remove(id) {
+    setErr('');
+    const { error } = await supabase.from('partidas').delete().eq('id', id);
+    if (error) setErr('No se pudo cancelar la partida. Inténtalo de nuevo.');
+    refresh();
+  }
 
   return (
     <>
@@ -141,9 +185,16 @@ export default function App() {
           <div><p className="eyebrow">Asociación Ludocuir</p><h1>{tab === 'list' ? 'Próximas partidas' : 'Nueva partida'}</h1></div>
         </header>
 
-        {tab === 'new' && <NewSession onCreate={(s) => { setSessions((ss) => [...ss, s]); go('list'); }} />}
+        {err && <p className="card notice" role="alert">{err}</p>}
 
-        {tab === 'list' && (
+        {tab === 'new' && <NewSession onCreate={create} />}
+
+        {tab === 'list' && status === 'loading' && <p className="card empty">Cargando partidas…</p>}
+        {tab === 'list' && status === 'error' && (
+          <div className="card empty"><p>No se pudieron cargar las partidas. Revisa la conexión.</p><button className="btn" onClick={refresh}>Reintentar</button></div>
+        )}
+
+        {tab === 'list' && status === 'ok' && (
           <section aria-label="Próximas partidas">
             {!sorted.length && (
               <div className="card empty">
@@ -154,9 +205,7 @@ export default function App() {
             <ul className="sessions">
               {sorted.map((s) => (
                 <SessionCard key={s.id} s={s}
-                  onJoin={(id, n) => upd(id, (x) => ({ ...x, players: [...x.players, n] }))}
-                  onLeave={(id, n) => upd(id, (x) => ({ ...x, players: x.players.filter((p) => p !== n) }))}
-                  onDelete={(id) => setSessions((ss) => ss.filter((x) => x.id !== id))} />
+                  onJoin={join} onLeave={leave} onDelete={remove} />
               ))}
             </ul>
           </section>
