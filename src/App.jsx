@@ -231,6 +231,7 @@ export default function App() {
   const [status, setStatus] = useState('loading');
   const [err, setErr] = useState('');
   const [tab, setTab] = useState('list');
+  const [day, setDay] = useState(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -266,7 +267,7 @@ export default function App() {
   const go = (t) => { setTab(t); window.scrollTo({ top: 0 }); };
   const run = async (q, msg) => { setErr(''); const { error } = await q; if (error) setErr(msg(error)); await refresh(); return !error; };
 
-  const create = async (s) => { if (await run(supabase.from('partidas').insert(s), () => 'No se pudo crear la partida.')) go('list'); };
+  const create = async (s) => { if (await run(supabase.from('partidas').insert(s), () => 'No se pudo crear la partida.')) { setDay(s.date); go('list'); } };
   const join = (id) => run(supabase.from('apuntados').insert({ partida_id: id }),
     (e) => (e.message.includes('partida_completa') ? 'La partida se acaba de llenar.' : 'No se pudo apuntar.'));
   const leave = (id, userId) => run(supabase.from('apuntados').delete().eq('partida_id', id).eq('user_id', userId), () => 'No se pudo quitar.');
@@ -276,6 +277,13 @@ export default function App() {
   if (session === undefined) return <main><p className="card empty">Cargando…</p></main>;
   if (!session) return <main><AuthScreen onRegistered={setFresh} /></main>;
   if (!me) return <main><p className="card empty">Cargando…</p></main>;
+
+  const today = new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD en hora local
+  const upcoming = sessions.filter((s) => s.date >= today);
+  const dates = [...new Set(upcoming.map((s) => s.date))].sort();
+  const activeDay = dates.includes(day) ? day : dates[0];
+  const shown = upcoming.filter((s) => s.date === activeDay);
+  const fmt = (d, o) => new Date(`${d}T00:00`).toLocaleDateString('es-ES', o);
 
   const tabs = [['list', 'Partidas'], ['new', 'Crear'], ...(me.role === 'admin' ? [['admin', 'Admin']] : [])];
   return (
@@ -295,11 +303,26 @@ export default function App() {
         )}
         {tab === 'list' && status === 'ok' && (
           <section aria-label="Próximas partidas">
-            {!sessions.length && (
+            {!dates.length && (
               <div className="card empty"><p>Todavía no hay ninguna partida.</p><button className="btn" onClick={() => go('new')}>Crear la primera</button></div>
             )}
+            {dates.length > 0 && (
+              <div className="days" role="group" aria-label="Fechas con partidas">
+                {dates.map((d) => {
+                  const n = upcoming.filter((s) => s.date === d).length;
+                  return (
+                    <button key={d} className={`daychip${d === activeDay ? ' on' : ''}`} aria-pressed={d === activeDay} onClick={() => setDay(d)}>
+                      <span className="wd">{fmt(d, { weekday: 'short' }).replace('.', '')}</span>
+                      <span className="dn">{fmt(d, { day: 'numeric' })}</span>
+                      <span className="mo">{fmt(d, { month: 'short' }).replace('.', '')}</span>
+                      <span className="ct">{n} {n === 1 ? 'partida' : 'partidas'}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <ul className="sessions">
-              {sessions.map((s) => <SessionCard key={s.id} s={s} me={me} onJoin={join} onLeave={leave} onDelete={remove} />)}
+              {shown.map((s) => <SessionCard key={s.id} s={s} me={me} onJoin={join} onLeave={leave} onDelete={remove} />)}
             </ul>
           </section>
         )}
@@ -308,7 +331,7 @@ export default function App() {
       <nav className="tabbar" aria-label="Navegación principal">
         {tabs.map(([k, label]) => (
           <button key={k} className={tab === k ? 'on' : ''} aria-current={tab === k ? 'page' : undefined} onClick={() => go(k)}>
-            <Icon d={ICONS[k]} /><span>{label}{k === 'list' && sessions.length > 0 && <b className="badge">{sessions.length}</b>}</span>
+            <Icon d={ICONS[k]} /><span>{label}{k === 'list' && upcoming.length > 0 && <b className="badge">{upcoming.length}</b>}</span>
           </button>
         ))}
       </nav>

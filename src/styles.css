@@ -113,3 +113,13 @@ input[type=checkbox] { display: inline-block; width: auto; margin: 0 10px 0 0; a
 .urow { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 15px; flex-wrap: wrap; }
 .urow:last-child { border-bottom: none; }
 .uact { display: flex; gap: 16px; }
+
+.days { display: flex; gap: 10px; overflow-x: auto; padding: 2px 2px 14px; scroll-snap-type: x proximity; }
+.daychip { flex: none; min-width: 74px; scroll-snap-align: start; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 12px; background: var(--glass); border: 1.5px solid var(--line); border-radius: 14px; color: var(--cream); }
+.daychip:hover { background: rgba(232,184,109,.1); }
+.daychip .wd { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+.daychip .dn { font-family: 'Cinzel', serif; font-size: 24px; font-weight: 700; line-height: 1.1; }
+.daychip .mo { font-size: 12px; color: var(--soft); text-transform: uppercase; letter-spacing: .06em; }
+.daychip .ct { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.daychip.on { background: rgba(232,184,109,.15); border-color: var(--gold); }
+.daychip.on .dn, .daychip.on .wd { color: var(--gold); }
