@@ -28,7 +28,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ pin });
   }
 
-  if (action === 'reset') {
+  if (action === 'reset' || action === 'setrole') {
     const token = (req.headers.authorization || '').replace('Bearer ', '');
     const { data: u } = await admin.auth.getUser(token);
     const { data: yo } = u?.user ? await admin.from('perfiles').select('role').eq('id', u.user.id).single() : { data: null };
@@ -36,6 +36,17 @@ export default async function handler(req, res) {
     const { data: rows } = await admin.from('perfiles').select('id, nick').ilike('nick', nick);
     const target = (rows || []).find((r) => r.nick.toLowerCase() === nick.toLowerCase());
     if (!target) return res.status(404).json({ error: 'No existe ese usuario.' });
+
+    if (action === 'setrole') {
+      const { role } = req.body;
+      if (!['user', 'admin'].includes(role)) return res.status(400).json({ error: 'Rol no válido.' });
+      // Nadie cambia su propio rol: así siempre queda al menos un admin
+      if (target.id === u.user.id) return res.status(400).json({ error: 'No puedes cambiar tu propio rol.' });
+      const { error } = await admin.from('perfiles').update({ role }).eq('id', target.id);
+      if (error) return res.status(500).json({ error: 'No se pudo cambiar el rol.' });
+      return res.status(200).json({ nick: target.nick, role });
+    }
+
     const pin = newPin();
     const { error } = await admin.auth.admin.updateUserById(target.id, { password: pin });
     if (error) return res.status(500).json({ error: 'No se pudo cambiar el PIN.' });

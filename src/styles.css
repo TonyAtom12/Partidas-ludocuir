@@ -108,3 +108,8 @@ input { font-size: 16px; } /* evita el zoom automático de iOS al enfocar */
 .pin { font-family: 'Cinzel', serif; font-size: 34px; font-weight: 700; letter-spacing: .18em; text-align: center; color: var(--gold); margin: 20px 0; padding: 16px 8px; border: 1.5px dashed var(--gold); border-radius: 14px; background: rgba(232,184,109,.08); user-select: all; }
 .me { margin-left: auto; text-align: right; font-size: 13px; color: var(--soft); line-height: 1.4; }
 input[type=checkbox] { display: inline-block; width: auto; margin: 0 10px 0 0; accent-color: var(--gold); }
+
+.users { list-style: none; margin-top: 12px; }
+.urow { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 15px; flex-wrap: wrap; }
+.urow:last-child { border-bottom: none; }
+.uact { display: flex; gap: 16px; }

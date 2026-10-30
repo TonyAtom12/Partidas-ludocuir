@@ -113,23 +113,50 @@ function PinScreen({ nick, pin, onDone }) {
   );
 }
 
-function AdminPanel({ session }) {
-  const [nick, setNick] = useState('');
-  const [res, setRes] = useState(null);
+function AdminPanel({ session, me }) {
+  const [users, setUsers] = useState([]);
+  const [q, setQ] = useState('');
   const [msg, setMsg] = useState('');
-  async function reset(e) {
-    e.preventDefault(); setMsg(''); setRes(null);
-    const d = await post({ action: 'reset', nick: nick.trim() }, session.access_token);
-    if (d.ok) setRes(d); else setMsg(d.error || 'No se pudo.');
-  }
+  const [pinRes, setPinRes] = useState(null);
+
+  const load = useCallback(async () => {
+    const { data } = await supabase.from('perfiles').select('id, nick, role').order('nick');
+    setUsers(data || []);
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const act = async (body) => {
+    setMsg(''); setPinRes(null);
+    const d = await post(body, session.access_token);
+    if (!d.ok) setMsg(d.error || 'No se pudo.'); else if (d.pin) setPinRes(d);
+    await load();
+  };
+  const setRole = (u, role) => {
+    const txt = role === 'admin' ? `¿Hacer administrador a ${u.nick}?` : `¿Quitar el rol de administrador a ${u.nick}?`;
+    if (window.confirm(txt)) act({ action: 'setrole', nick: u.nick, role });
+  };
+  const shown = users.filter((u) => u.nick.toLowerCase().includes(q.trim().toLowerCase()));
+
   return (
-    <form className="card" onSubmit={reset}>
-      <h2 className="h2">Nuevo PIN para un socio</h2>
-      <label>Nick<input value={nick} onChange={(e) => setNick(e.target.value)} autoCapitalize="none" autoCorrect="off" /></label>
-      <button className="btn block" disabled={!NICK_RE.test(nick.trim())}>Generar PIN nuevo</button>
+    <section className="card">
+      <h2 className="h2">Socios ({users.length})</h2>
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nick…" autoCapitalize="none" autoCorrect="off" />
       {msg && <p className="hint" role="alert" style={{ color: 'var(--danger)' }}>{msg}</p>}
-      {res && <><p className="hint">PIN nuevo de {res.nick} (pásaselo y no se vuelve a mostrar):</p><div className="pin">{res.pin}</div></>}
-    </form>
+      {pinRes && <><p className="hint">PIN nuevo de {pinRes.nick} (pásaselo; no se vuelve a mostrar):</p><div className="pin">{pinRes.pin}</div></>}
+      <ul className="users">
+        {shown.map((u) => (
+          <li key={u.id} className="urow">
+            <span>{u.nick} {u.role === 'admin' && <span className="tag">admin</span>}{u.id === me.id && <small> (tú)</small>}</span>
+            <span className="uact">
+              <button className="link" onClick={() => act({ action: 'reset', nick: u.nick })}>Nuevo PIN</button>
+              {u.id !== me.id && (u.role === 'admin'
+                ? <button className="link danger" onClick={() => setRole(u, 'user')}>Quitar admin</button>
+                : <button className="link" onClick={() => setRole(u, 'admin')}>Hacer admin</button>)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -262,7 +289,7 @@ export default function App() {
 
         {err && <p className="card notice" role="alert">{err}</p>}
         {tab === 'new' && <NewSession onCreate={create} />}
-        {tab === 'admin' && <AdminPanel session={session} />}
+        {tab === 'admin' && <AdminPanel session={session} me={me} />}
         {tab === 'list' && status === 'error' && (
           <div className="card empty"><p>No se pudieron cargar las partidas. Revisa la conexión.</p><button className="btn" onClick={refresh}>Reintentar</button></div>
         )}
