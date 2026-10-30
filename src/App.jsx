@@ -35,6 +35,13 @@ function GameSearch({ onPick }) {
       {state === 'loading' && <p className="hint">Buscando…</p>}
       {state === 'error' && <p className="hint">No se pudo buscar. Inténtalo de nuevo en un momento.</p>}
       {state === 'done' && !results.length && <p className="hint">Sin resultados para "{q}".</p>}
+      {q.trim().length >= 2 && (
+        <button type="button" className="option-btn" style={{ marginTop: 10 }}
+          onClick={() => { onPick({ id: null, name: q.trim(), custom: true }); setQ(''); setResults([]); }}>
+          <span className="thumb" />
+          <span>Usar «<b>{q.trim()}</b>» tal cual<br /><small>Si no aparece en la lista</small></span>
+        </button>
+      )}
       <ul className="results">
         {results.map((g) => (
           <li key={g.id}>
@@ -186,10 +193,10 @@ function NewSession({ onCreate }) {
   );
 }
 
-function SessionCard({ s, me, onJoin, onLeave, onDelete }) {
+function SessionCard({ s, me, onJoin, onLeave, onDelete, onLogin }) {
   const full = s.players.length >= s.max;
-  const joined = s.players.some((p) => p.id === me.id);
-  const manage = s.creatorId === me.id || me.role === 'admin';
+  const joined = !!me && s.players.some((p) => p.id === me.id);
+  const manage = !!me && (s.creatorId === me.id || me.role === 'admin');
   const when = new Date(`${s.date}T${s.time}`).toLocaleString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
   return (
     <li className="card session">
@@ -202,11 +209,12 @@ function SessionCard({ s, me, onJoin, onLeave, onDelete }) {
       <ul className="tags">
         {s.players.map((p) => (
           <li key={p.id} className="tag">{p.nick}
-            {(p.id === me.id || manage) && <button onClick={() => onLeave(s.id, p.id)} aria-label={`Quitar a ${p.nick}`}>✕</button>}
+            {me && (p.id === me.id || manage) && <button onClick={() => onLeave(s.id, p.id)} aria-label={`Quitar a ${p.nick}`}>✕</button>}
           </li>
         ))}
       </ul>
-      {!joined && !full && <button className="btn-ghost" style={{ width: '100%' }} onClick={() => onJoin(s.id)}>Apuntarme</button>}
+      {me && !joined && !full && <button className="btn-ghost" style={{ width: '100%' }} onClick={() => onJoin(s.id)}>Apuntarme</button>}
+      {!me && !full && <button className="btn-ghost" style={{ width: '100%' }} onClick={onLogin}>Entra para apuntarte</button>}
       {manage && <p className="cancel"><button className="link danger" onClick={() => onDelete(s.id)}>Cancelar partida</button></p>}
     </li>
   );
@@ -221,7 +229,7 @@ const GameDie = () => (
 const Icon = ({ d, extra }) => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d={d} />{extra}</svg>
 );
-const ICONS = { list: 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01', new: 'M12 5v14M5 12h14', admin: 'M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z' };
+const ICONS = { list: 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01', new: 'M12 5v14M5 12h14', admin: 'M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z', login: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z' };
 
 export default function App() {
   const [session, setSession] = useState(undefined);
@@ -245,6 +253,8 @@ export default function App() {
     supabase.from('perfiles').select('id, nick, role').eq('id', uid).single().then(({ data }) => setMe(data));
   }, [uid]);
 
+  const ready = session === null || !!me; // sesión resuelta (con o sin login)
+
   const refresh = useCallback(async () => {
     const { data, error } = await supabase.from('partidas')
       .select('*, creador:perfiles!creator_id(nick), apuntados(user_id, created_at, perfiles(nick))').order('date').order('time');
@@ -258,11 +268,16 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!me) return;
+    if (!ready) return;
     refresh();
     const ch = supabase.channel('cambios').on('postgres_changes', { event: '*', schema: 'public' }, refresh).subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [me, refresh]);
+  }, [ready, refresh]);
+
+  useEffect(() => {
+    if (me && tab === 'login') setTab('list');
+    if (!me && session !== undefined && (tab === 'new' || tab === 'admin')) setTab('list');
+  }, [me, session, tab]);
 
   const go = (t) => { setTab(t); window.scrollTo({ top: 0 }); };
   const run = async (q, msg) => { setErr(''); const { error } = await q; if (error) setErr(msg(error)); await refresh(); return !error; };
@@ -275,8 +290,7 @@ export default function App() {
 
   if (fresh) return <main><PinScreen {...fresh} onDone={() => setFresh(null)} /></main>;
   if (session === undefined) return <main><p className="card empty">Cargando…</p></main>;
-  if (!session) return <main><AuthScreen onRegistered={setFresh} /></main>;
-  if (!me) return <main><p className="card empty">Cargando…</p></main>;
+  if (session && !me) return <main><p className="card empty">Cargando…</p></main>;
 
   const today = new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD en hora local
   const upcoming = sessions.filter((s) => s.date >= today);
@@ -285,26 +299,30 @@ export default function App() {
   const shown = upcoming.filter((s) => s.date === activeDay);
   const fmt = (d, o) => new Date(`${d}T00:00`).toLocaleDateString('es-ES', o);
 
-  const tabs = [['list', 'Partidas'], ['new', 'Crear'], ...(me.role === 'admin' ? [['admin', 'Admin']] : [])];
+  const tabs = !me ? [['list', 'Partidas'], ['login', 'Entrar']]
+    : [['list', 'Partidas'], ['new', 'Crear'], ...(me.role === 'admin' ? [['admin', 'Admin']] : [])];
   return (
     <>
       <main>
-        <header className="topbar">
-          <GameDie />
-          <div><p className="eyebrow">Asociación Ludocuir</p><h1>{{ list: 'Próximas partidas', new: 'Nueva partida', admin: 'Administración' }[tab]}</h1></div>
-          <div className="me">{me.nick}<br /><button className="link" onClick={() => supabase.auth.signOut()}>Salir</button></div>
-        </header>
+        {tab !== 'login' && (
+          <header className="topbar">
+            <GameDie />
+            <div><p className="eyebrow">Asociación Ludocuir</p><h1>{{ list: 'Próximas partidas', new: 'Nueva partida', admin: 'Administración' }[tab]}</h1></div>
+            {me && <div className="me">{me.nick}<br /><button className="link" onClick={() => supabase.auth.signOut()}>Salir</button></div>}
+          </header>
+        )}
 
         {err && <p className="card notice" role="alert">{err}</p>}
-        {tab === 'new' && <NewSession onCreate={create} />}
-        {tab === 'admin' && <AdminPanel session={session} me={me} />}
+        {me && tab === 'new' && <NewSession onCreate={create} />}
+        {!me && tab === 'login' && <AuthScreen onRegistered={setFresh} />}
+        {me && tab === 'admin' && <AdminPanel session={session} me={me} />}
         {tab === 'list' && status === 'error' && (
           <div className="card empty"><p>No se pudieron cargar las partidas. Revisa la conexión.</p><button className="btn" onClick={refresh}>Reintentar</button></div>
         )}
         {tab === 'list' && status === 'ok' && (
           <section aria-label="Próximas partidas">
             {!dates.length && (
-              <div className="card empty"><p>Todavía no hay ninguna partida.</p><button className="btn" onClick={() => go('new')}>Crear la primera</button></div>
+              <div className="card empty"><p>Todavía no hay ninguna partida.</p><button className="btn" onClick={() => go(me ? 'new' : 'login')}>{me ? 'Crear la primera' : 'Entrar para crear una'}</button></div>
             )}
             {dates.length > 0 && (
               <div className="days" role="group" aria-label="Fechas con partidas">
@@ -322,7 +340,7 @@ export default function App() {
               </div>
             )}
             <ul className="sessions">
-              {shown.map((s) => <SessionCard key={s.id} s={s} me={me} onJoin={join} onLeave={leave} onDelete={remove} />)}
+              {shown.map((s) => <SessionCard key={s.id} s={s} me={me} onJoin={join} onLeave={leave} onDelete={remove} onLogin={() => go('login')} />)}
             </ul>
           </section>
         )}
