@@ -123,3 +123,11 @@ input[type=checkbox] { display: inline-block; width: auto; margin: 0 10px 0 0; a
 .daychip .ct { font-size: 11px; color: var(--muted); margin-top: 3px; }
 .daychip.on { background: rgba(232,184,109,.15); border-color: var(--gold); }
 .daychip.on .dn, .daychip.on .wd { color: var(--gold); }
+
+.ginfo { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 14px 0 4px; }
+.gimg { width: 76px; height: 76px; object-fit: cover; border-radius: 12px; border: 1px solid var(--line); display: block; background: rgba(232,184,109,.12); }
+.gtext { display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; color: var(--soft); }
+.weight { display: inline-flex; align-items: center; gap: 8px; color: var(--gold); font-size: 13px; }
+.wdots { display: inline-flex; gap: 3px; }
+.wdots i { width: 8px; height: 8px; border-radius: 50%; background: rgba(232,184,109,.2); }
+.wdots i.on { background: var(--gold); }

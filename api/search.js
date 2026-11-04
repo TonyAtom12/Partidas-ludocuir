@@ -12,7 +12,7 @@ const MOCK = [
   { id: 174430, name: 'Gloomhaven', year: 2017, minPlayers: 1, maxPlayers: 4, minutes: 120 },
   { id: 167791, name: 'Terraforming Mars', year: 2016, minPlayers: 1, maxPlayers: 5, minutes: 120 },
   { id: 266192, name: 'Wingspan', year: 2019, minPlayers: 1, maxPlayers: 5, minutes: 70 },
-].map((g) => ({ ...g, thumbnail: null }));
+].map((g) => ({ ...g, weight: { 13: 2.3, 822: 1.9, 30549: 2.4, 174430: 3.9, 167791: 3.2, 266192: 2.4 }[g.id], thumbnail: null }));
 
 async function bgg(path, token) {
   const r = await fetch(`${BASE}${path}`, { headers: { Authorization: `Bearer ${token}` } });
@@ -35,7 +35,7 @@ export default async function handler(req, res) {
     const ids = arr(s.items?.item).slice(0, 8).map((i) => i.id);
     if (!ids.length) return res.status(200).json({ results: [] });
 
-    const t = await bgg(`/thing?id=${ids.join(',')}`, token);
+    const t = await bgg(`/thing?stats=1&id=${ids.join(',')}`, token);
     const results = arr(t.items?.item).map((i) => ({
       id: Number(i.id),
       name: arr(i.name).find((n) => n.type === 'primary')?.value ?? '?',
@@ -43,6 +43,7 @@ export default async function handler(req, res) {
       minPlayers: Number(i.minplayers?.value) || null,
       maxPlayers: Number(i.maxplayers?.value) || null,
       minutes: Number(i.playingtime?.value) || null,
+      weight: Math.round((Number(i.statistics?.ratings?.averageweight?.value) || 0) * 10) / 10 || null,
       thumbnail: i.thumbnail || null,
     }));
     // Caché en el edge de Vercel: un día, para no machacar la BGG

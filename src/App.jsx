@@ -7,6 +7,32 @@ const post = (body, token) => fetch('/api/auth', {
   method: 'POST', headers: { 'Content-Type': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) }, body: JSON.stringify(body),
 }).then(async (r) => ({ ok: r.ok, ...(await r.json().catch(() => ({}))) }));
 
+const fmtW = (w) => w.toLocaleString('es-ES', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const weightLabel = (w) => (w < 2 ? 'Ligero' : w < 3 ? 'Medio' : w < 4 ? 'Medio-pesado' : 'Pesado');
+
+function Weight({ w }) {
+  if (!w) return null;
+  return (
+    <span className="weight" title="Complejidad según BGG (1 = muy fácil, 5 = muy complejo)">
+      <span className="wdots" aria-hidden="true">{[1, 2, 3, 4, 5].map((i) => <i key={i} className={w >= i - 0.5 ? 'on' : ''} />)}</span>
+      {weightLabel(w)} · {fmtW(w)}/5
+    </span>
+  );
+}
+
+function GameInfo({ g }) {
+  const players = g.minPlayers && g.maxPlayers ? `${g.minPlayers === g.maxPlayers ? g.minPlayers : `${g.minPlayers}–${g.maxPlayers}`} jugadores` : null;
+  const facts = [players, g.minutes ? `${g.minutes} min` : null].filter(Boolean).join(' · ');
+  if (!g.thumbnail && !facts && !g.weight) return null;
+  const img = g.thumbnail && <img className="gimg" src={g.thumbnail} alt={`Carátula de ${g.name}`} loading="lazy" />;
+  return (
+    <div className="ginfo">
+      {img && (g.id ? <a href={`https://boardgamegeek.com/boardgame/${g.id}`} target="_blank" rel="noreferrer">{img}</a> : img)}
+      <div className="gtext">{facts && <span>{facts}</span>}<Weight w={g.weight} /></div>
+    </div>
+  );
+}
+
 function GameSearch({ onPick }) {
   const [q, setQ] = useState('');
   const [results, setResults] = useState([]);
@@ -48,7 +74,7 @@ function GameSearch({ onPick }) {
             <button type="button" className="option-btn" onClick={() => { onPick(g); setQ(''); setResults([]); }}>
               {g.thumbnail ? <img className="thumb" src={g.thumbnail} alt="" /> : <span className="thumb" />}
               <span><b>{g.name}</b> {g.year && `(${g.year})`}<br />
-                <small>{g.minPlayers}–{g.maxPlayers} jugadores · {g.minutes} min</small></span>
+                <small>{g.minPlayers}–{g.maxPlayers} jugadores · {g.minutes} min{g.weight ? ` · peso ${fmtW(g.weight)}` : ''}</small></span>
             </button>
           </li>
         ))}
@@ -201,6 +227,7 @@ function SessionCard({ s, me, onJoin, onLeave, onDelete, onLogin }) {
   return (
     <li className="card session">
       <h3>{s.game.name}</h3>
+      <GameInfo g={s.game} />
       <p className="when">{when}</p>
       <p className="where">{s.place && <>{s.place} · </>}Organiza {s.creatorNick}</p>
       <div className="ornament"><div className="ornament-line" /><div className="ornament-dot" /><div className="ornament-line" /></div>
@@ -344,6 +371,12 @@ export default function App() {
             </ul>
           </section>
         )}
+        <footer>
+          <a href="https://boardgamegeek.com" target="_blank" rel="noreferrer">
+            <img src="/powered-by-bgg.png" alt="Powered by BGG" style={{ height: 40, width: 'auto' }}
+              onError={(e) => { e.currentTarget.replaceWith(document.createTextNode('Powered by BGG')); }} />
+          </a>
+        </footer>
       </main>
 
       <nav className="tabbar" aria-label="Navegación principal">
