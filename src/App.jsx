@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from './supabase.js';
 
+const PLACES = ['Caramuel', 'Domicilio social'];
 const NICK_RE = /^[A-Za-z0-9_]{3,20}$/;
 const emailFor = (n) => `${n.toLowerCase()}@ludocuir.app`;
 const post = (body, token) => fetch('/api/auth', {
@@ -211,7 +212,15 @@ function NewSession({ onCreate }) {
         <label>Hora<input type="time" value={f.time} onChange={set('time')} /></label>
       </div>
       <div className="row">
-        <label>Lugar<input value={f.place} onChange={set('place')} placeholder="Local de la asociación" /></label>
+        <div className="field">
+          <label htmlFor="lugar">Lugar</label>
+          <input id="lugar" value={f.place} onChange={set('place')} placeholder="Otro lugar…" />
+          <div className="chips">
+            {PLACES.map((p) => (
+              <button key={p} type="button" className={`chip${f.place === p ? ' on' : ''}`} aria-pressed={f.place === p} onClick={() => setF({ ...f, place: p })}>{p}</button>
+            ))}
+          </div>
+        </div>
         <label>Plazas<input type="number" min="2" max="20" value={f.max} onChange={set('max')} /></label>
       </div>
       <button className="btn block" disabled={!ok}>Crear partida</button>
