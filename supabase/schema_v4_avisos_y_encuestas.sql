@@ -77,17 +77,18 @@ create policy "quitar mi voto" on encuesta_votos for delete to authenticated usi
 -- Crear encuesta + días de golpe (todo o nada). Se ejecuta con los permisos de quien llama:
 -- si no es admin, las políticas de arriba lo bloquean.
 create or replace function crear_encuesta(p_title text, p_desc text, p_dates date[]) returns uuid
-language plpgsql security invoker set search_path = public as $$
+language plpgsql security invoker set search_path = public as $fn$
 declare v_id uuid;
 begin
   if not is_admin() then raise exception 'solo_admin'; end if;
-  if coalesce(array_length(p_dates, 1), 0) < 1 or array_length(p_dates, 1) > 31 then
+  if array_length(p_dates, 1) is null or array_length(p_dates, 1) not between 1 and 31 then
     raise exception 'dias_invalidos';
   end if;
   insert into encuestas (title, description) values (trim(p_title), trim(coalesce(p_desc, ''))) returning id into v_id;
   insert into encuesta_dias (encuesta_id, date) select v_id, x.d from (select distinct unnest(p_dates) as d) x;
   return v_id;
-end $$;
+end
+$fn$;
 revoke execute on function crear_encuesta(text, text, date[]) from public, anon;
 grant execute on function crear_encuesta(text, text, date[]) to authenticated;
 
