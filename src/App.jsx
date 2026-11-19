@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from './supabase.js';
 import { useEncuestas, EncuestasView, pendingPolls } from './Encuestas.jsx';
+import { AsistenciaView, MiActividad } from './Asistencia.jsx';
 import { pushConfigured, getPushState, enablePush, disablePush } from './push.js';
 
 const PLACES = ['Caramuel', 'Domicilio social'];
@@ -149,6 +150,20 @@ function PinScreen({ nick, pin, onDone }) {
   );
 }
 
+function AdminHub({ session, me }) {
+  const [sec, setSec] = useState('asistencia');
+  return (
+    <>
+      <div className="seg" role="tablist">
+        {[['asistencia', 'Asistencia'], ['usuarios', 'Usuarios']].map(([k, l]) => (
+          <button key={k} type="button" role="tab" aria-selected={sec === k} className={sec === k ? 'on' : ''} onClick={() => setSec(k)}>{l}</button>
+        ))}
+      </div>
+      {sec === 'usuarios' ? <AdminPanel session={session} me={me} /> : <AsistenciaView />}
+    </>
+  );
+}
+
 function AdminPanel({ session, me }) {
   const [users, setUsers] = useState([]);
   const [q, setQ] = useState('');
@@ -267,7 +282,7 @@ const GameDie = () => (
 const Icon = ({ d, extra }) => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d={d} />{extra}</svg>
 );
-const ICONS = { list: 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01', new: 'M12 5v14M5 12h14', admin: 'M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z', polls: 'M5 21V11M12 21V4M19 21v-7', bell: 'M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0', login: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z' };
+const ICONS = { list: 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01', new: 'M12 5v14M5 12h14', admin: 'M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z', polls: 'M5 21V11M12 21V4M19 21v-7', me: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z', bell: 'M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0', login: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z' };
 
 export default function App() {
   const [session, setSession] = useState(undefined);
@@ -327,7 +342,7 @@ export default function App() {
 
   useEffect(() => {
     if (me && tab === 'login') setTab('list');
-    if (!me && session !== undefined && (tab === 'new' || tab === 'admin' || tab === 'polls')) setTab('list');
+    if (!me && session !== undefined && (tab === 'new' || tab === 'admin' || tab === 'polls' || tab === 'me')) setTab('list');
   }, [me, session, tab]);
 
   const go = (t) => { setTab(t); window.scrollTo({ top: 0 }); };
@@ -379,14 +394,14 @@ export default function App() {
   const fmt = (d, o) => new Date(`${d}T00:00`).toLocaleDateString('es-ES', o);
 
   const tabs = !me ? [['list', 'Partidas'], ['login', 'Entrar']]
-    : [['list', 'Partidas'], ['new', 'Crear'], ['polls', 'Encuestas'], ...(me.role === 'admin' ? [['admin', 'Admin']] : [])];
+    : [['list', 'Partidas'], ['new', 'Crear'], ['polls', 'Encuestas'], ['me', 'Yo'], ...(me.role === 'admin' ? [['admin', 'Admin']] : [])];
   return (
     <>
       <main>
         {tab !== 'login' && (
           <header className="topbar">
             <GameDie />
-            <div><p className="eyebrow">Asociación Ludocuir</p><h1>{{ list: 'Próximas partidas', new: 'Nueva partida', polls: 'Encuestas', admin: 'Administración' }[tab]}</h1></div>
+            <div><p className="eyebrow">Asociación Ludocuir</p><h1>{{ list: 'Próximas partidas', new: 'Nueva partida', polls: 'Encuestas', me: 'Mi actividad', admin: 'Administración' }[tab]}</h1></div>
             {me && (
               <div className="actions">
                 {push !== 'hidden' && (
@@ -413,7 +428,8 @@ export default function App() {
         {me && tab === 'new' && <NewSession onCreate={create} />}
         {!me && tab === 'login' && <AuthScreen onRegistered={setFresh} />}
         {me && tab === 'polls' && <EncuestasView me={me} polls={polls} status={pollStatus} refresh={refreshPolls} />}
-        {me && tab === 'admin' && <AdminPanel session={session} me={me} />}
+        {me && tab === 'me' && <MiActividad me={me} />}
+        {me && tab === 'admin' && me.role === 'admin' && <AdminHub session={session} me={me} />}
         {tab === 'list' && status === 'error' && (
           <div className="card empty"><p>No se pudieron cargar las partidas. Revisa la conexión.</p><button className="btn" onClick={refresh}>Reintentar</button></div>
         )}

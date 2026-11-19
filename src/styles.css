@@ -176,3 +176,35 @@ textarea::placeholder { color: rgba(160,144,128,.7); }
 .opt-bar > span { display: block; height: 100%; background: linear-gradient(90deg, var(--gold-lo), var(--gold)); border-radius: 4px; transition: width .4s ease; }
 .opt-who { font-size: 12.5px; color: var(--muted); line-height: 1.4; }
 .poll-admin { display: flex; justify-content: center; gap: 22px; margin-top: 16px; }
+
+/* ---- Asistencia y mi actividad ---- */
+.seg { display: flex; gap: 4px; padding: 4px; margin: 0 0 12px; background: var(--glass); border: 1px solid var(--line); border-radius: 12px; }
+.seg button { flex: 1; padding: 9px 8px; border: 0; border-radius: 9px; background: transparent; color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
+.seg button.on { background: rgba(232,184,109,.18); color: var(--gold-hi); box-shadow: inset 0 0 0 1px var(--line); }
+.daynav { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+.daynav input { flex: 1; min-width: 0; }
+.daynav .btn-ghost { padding: 8px 14px; font-size: 1.2rem; }
+.range { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.range input { width: 100%; min-width: 0; }
+.mini { display: flex; gap: 16px; flex-wrap: wrap; margin: 8px 0; }
+.chks { list-style: none; margin: 8px 0 14px; padding: 0; display: grid; gap: 2px; }
+.chks li { display: flex; align-items: center; gap: 6px; }
+.chk { flex: 1; display: flex; align-items: center; gap: 12px; padding: 10px 4px; cursor: pointer; }
+.chk input { width: 22px; height: 22px; flex: none; accent-color: var(--gold); }
+.chk b { display: block; }
+.chk small { display: block; opacity: .7; }
+.x { border: 0; background: transparent; color: inherit; font-size: 1.1rem; padding: 8px 10px; cursor: pointer; opacity: .7; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.stats.one { grid-template-columns: 1fr; }
+.stats div { text-align: center; padding: 14px 6px; border-radius: 14px; background: var(--glass); }
+.stats b { display: block; font-size: 1.8rem; line-height: 1.1; }
+.stats span { font-size: .8rem; opacity: .75; }
+.bars { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 10px; }
+.bars li { display: grid; grid-template-columns: minmax(70px, 38%) 1fr auto; align-items: center; gap: 10px; }
+.bar-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-track { height: 10px; border-radius: 6px; background: rgba(255,255,255,.08); overflow: hidden; }
+.bar-track span { display: block; height: 100%; border-radius: 6px; background: var(--gold); }
+.bar-n { font-variant-numeric: tabular-nums; font-weight: 600; }
+.daylist { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 10px; }
+.daylist div { display: flex; justify-content: space-between; gap: 10px; }
+.daylist small { display: block; opacity: .7; margin-top: 2px; }
