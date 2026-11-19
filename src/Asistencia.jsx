@@ -279,7 +279,7 @@ export function MiActividad({ me }) {
       <div className="card">
         <p className="eyebrow">{me.nick}</p>
         {s.dias === 0
-          ? <p className="hint">Todavía no tienes asistencias registradas. Se cuentan cuando un administrador pasa lista de la quedada.</p>
+          ? <p className="hint">Todavía no tienes quedadas. Cuentan los días pasados en los que te apuntaste a alguna partida, o en los que un administrador te marcó en la lista.</p>
           : <div className="stats one"><div><b>{s.dias}</b><span>{s.dias === 1 ? 'quedada' : 'quedadas'}</span></div></div>}
         {s.dias > 0 && <p className="hint" style={{ textAlign: 'center' }}>Primera: {dayShort(s.primer_dia)} · Última: {dayShort(s.ultimo_dia)}</p>}
       </div>
@@ -313,7 +313,7 @@ export function MiActividad({ me }) {
           </ul>
         </div>
       )}
-      {s.dias > 0 && <p className="hint" style={{ textAlign: 'center' }}>Cuenta un juego cuando viniste ese día y estabas apuntado a la partida. Solo tú ves esto.</p>}
+      {s.dias > 0 && <p className="hint" style={{ textAlign: 'center' }}>Cuenta un juego cuando ese día cuenta como asistido y estabas apuntado a la partida. Solo tú ves esto.</p>}
     </section>
   );
 }

@@ -46,10 +46,23 @@ revoke execute on function guardar_asistencia(date, text[]) from public, anon;
 grant execute on function guardar_asistencia(date, text[]) to authenticated;
 
 -- Estadísticas del propio jugador (solo las suyas: se filtra por auth.uid()).
--- "Jugó X" = vino ese día (según la lista de asistencia) y estaba apuntado a esa partida.
+-- Un día cuenta como asistido si:
+--   a) un admin pasó lista ese día y el jugador figura en ella, o
+--   b) es un día ANTERIOR A HOY en el que nadie pasó lista y el jugador estaba apuntado a alguna partida.
+-- "Jugó X" = ese día contó como asistido y estaba apuntado a esa partida.
 create or replace function mis_estadisticas() returns jsonb
 language sql stable security definer set search_path = public as $fn$
-  with d as (select fecha from asistencias where user_id = auth.uid()),
+  with confirmados as (
+    select fecha from asistencias where user_id = auth.uid()
+  ),
+  sin_lista as (
+    select distinct p.date as fecha
+    from apuntados a join partidas p on p.id = a.partida_id
+    where a.user_id = auth.uid()
+      and p.date between date '2000-01-01' and ((now() at time zone 'Europe/Madrid')::date - 1)
+      and not exists (select 1 from asistencias s where s.fecha = p.date)
+  ),
+  d as (select fecha from confirmados union select fecha from sin_lista),
   j as (
     select jsonb_extract_path_text(p.game, 'name') as juego, count(*) as n
     from apuntados a join partidas p on p.id = a.partida_id
