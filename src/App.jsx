@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from './supabase.js';
+import { useEncuestas, EncuestasView, pendingPolls } from './Encuestas.jsx';
+import { pushConfigured, getPushState, enablePush, disablePush } from './push.js';
 
 const PLACES = ['Caramuel', 'Domicilio social'];
 const NICK_RE = /^[A-Za-z0-9_]{3,20}$/;
@@ -265,7 +267,7 @@ const GameDie = () => (
 const Icon = ({ d, extra }) => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d={d} />{extra}</svg>
 );
-const ICONS = { list: 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01', new: 'M12 5v14M5 12h14', admin: 'M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z', login: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z' };
+const ICONS = { list: 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01', new: 'M12 5v14M5 12h14', admin: 'M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z', polls: 'M5 21V11M12 21V4M19 21v-7', bell: 'M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0', login: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z' };
 
 export default function App() {
   const [session, setSession] = useState(undefined);
@@ -276,6 +278,9 @@ export default function App() {
   const [err, setErr] = useState('');
   const [tab, setTab] = useState('list');
   const [day, setDay] = useState(null);
+  const [info, setInfo] = useState('');
+  const [push, setPush] = useState('hidden'); // hidden | busy | unsupported | denied | on | off
+  const [hideAvisos, setHideAvisos] = useState(() => { try { return localStorage.getItem('avisos:oculto') === '1'; } catch { return false; } });
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -290,6 +295,16 @@ export default function App() {
   }, [uid]);
 
   const ready = session === null || !!me; // sesión resuelta (con o sin login)
+  const { polls, status: pollStatus, refresh: refreshPolls } = useEncuestas(!!me);
+
+  useEffect(() => {
+    if (!me || !pushConfigured) { setPush('hidden'); return; }
+    let cancel = false;
+    getPushState().then((st) => { if (!cancel) setPush(st); }).catch(() => { if (!cancel) setPush('unsupported'); });
+    return () => { cancel = true; };
+  }, [me?.id]);
+
+  useEffect(() => { if (!info) return; const t = setTimeout(() => setInfo(''), 8000); return () => clearTimeout(t); }, [info]);
 
   const refresh = useCallback(async () => {
     const { data, error } = await supabase.from('partidas')
@@ -312,17 +327,45 @@ export default function App() {
 
   useEffect(() => {
     if (me && tab === 'login') setTab('list');
-    if (!me && session !== undefined && (tab === 'new' || tab === 'admin')) setTab('list');
+    if (!me && session !== undefined && (tab === 'new' || tab === 'admin' || tab === 'polls')) setTab('list');
   }, [me, session, tab]);
 
   const go = (t) => { setTab(t); window.scrollTo({ top: 0 }); };
   const run = async (q, msg) => { setErr(''); const { error } = await q; if (error) setErr(msg(error)); await refresh(); return !error; };
 
-  const create = async (s) => { if (await run(supabase.from('partidas').insert(s), () => 'No se pudo crear la partida.')) { setDay(s.date); go('list'); } };
+  const create = async (s) => {
+    setErr('');
+    const { data, error } = await supabase.from('partidas').insert(s).select('id').single();
+    if (error) { setErr('No se pudo crear la partida.'); return; }
+    // Avisa a quien tenga los avisos activados. No bloquea ni molesta si falla.
+    fetch('/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ partidaId: data.id }),
+    }).catch(() => {});
+    await refresh(); setDay(s.date); go('list');
+  };
   const join = (id) => run(supabase.from('apuntados').insert({ partida_id: id }),
     (e) => (e.message.includes('partida_completa') ? 'La partida se acaba de llenar.' : 'No se pudo apuntar.'));
   const leave = (id, userId) => run(supabase.from('apuntados').delete().eq('partida_id', id).eq('user_id', userId), () => 'No se pudo quitar.');
   const remove = (id) => run(supabase.from('partidas').delete().eq('id', id), () => 'No se pudo cancelar la partida.');
+
+  const togglePush = async () => {
+    setErr(''); setInfo('');
+    if (push === 'unsupported') return setInfo('Este navegador no permite avisos. En iPhone hay que instalar antes la app (Compartir → Añadir a pantalla de inicio) y activarlos desde ahí.');
+    if (push === 'denied') return setInfo('Tienes los avisos bloqueados para esta web. Actívalos en los ajustes del navegador (candado junto a la dirección → Permisos → Notificaciones).');
+    if (push === 'on') { try { await disablePush(); } catch {} setPush('off'); return setInfo('Avisos desactivados en este dispositivo.'); }
+    setPush('busy');
+    const r = await enablePush();
+    setPush(await getPushState().catch(() => 'off'));
+    if (r.ok) setInfo('¡Listo! Te avisaremos cuando alguien cree una partida.');
+    else if (r.reason === 'denied') setInfo('Has bloqueado los avisos. Puedes cambiarlo en los ajustes del navegador.');
+    else if (r.reason === 'no-sw') setInfo('Recarga la página e inténtalo de nuevo.');
+    else if (r.reason !== 'dismissed') setInfo('No se pudieron activar los avisos. Inténtalo de nuevo.');
+  };
+  const hidePromo = () => { setHideAvisos(true); try { localStorage.setItem('avisos:oculto', '1'); } catch {} };
+  // Al salir, este dispositivo deja de recibir avisos de esa cuenta (por si el móvil es compartido)
+  const salir = async () => { try { await disablePush(); } catch {} supabase.auth.signOut(); };
 
   if (fresh) return <main><PinScreen {...fresh} onDone={() => setFresh(null)} /></main>;
   if (session === undefined) return <main><p className="card empty">Cargando…</p></main>;
@@ -336,21 +379,40 @@ export default function App() {
   const fmt = (d, o) => new Date(`${d}T00:00`).toLocaleDateString('es-ES', o);
 
   const tabs = !me ? [['list', 'Partidas'], ['login', 'Entrar']]
-    : [['list', 'Partidas'], ['new', 'Crear'], ...(me.role === 'admin' ? [['admin', 'Admin']] : [])];
+    : [['list', 'Partidas'], ['new', 'Crear'], ['polls', 'Encuestas'], ...(me.role === 'admin' ? [['admin', 'Admin']] : [])];
   return (
     <>
       <main>
         {tab !== 'login' && (
           <header className="topbar">
             <GameDie />
-            <div><p className="eyebrow">Asociación Ludocuir</p><h1>{{ list: 'Próximas partidas', new: 'Nueva partida', admin: 'Administración' }[tab]}</h1></div>
-            {me && <div className="me">{me.nick}<br /><button className="link" onClick={() => supabase.auth.signOut()}>Salir</button></div>}
+            <div><p className="eyebrow">Asociación Ludocuir</p><h1>{{ list: 'Próximas partidas', new: 'Nueva partida', polls: 'Encuestas', admin: 'Administración' }[tab]}</h1></div>
+            {me && (
+              <div className="actions">
+                {push !== 'hidden' && (
+                  <button className={`bell${push === 'on' ? ' on' : ''}`} onClick={togglePush} disabled={push === 'busy'} aria-pressed={push === 'on'}
+                    aria-label={push === 'on' ? 'Desactivar avisos de nuevas partidas' : 'Activar avisos de nuevas partidas'}
+                    title={push === 'on' ? 'Avisos activados' : 'Avisarme de nuevas partidas'}>
+                    <Icon d={ICONS.bell} />
+                  </button>
+                )}
+                <div className="me">{me.nick}<br /><button className="link" onClick={salir}>Salir</button></div>
+              </div>
+            )}
           </header>
         )}
 
         {err && <p className="card notice" role="alert">{err}</p>}
+        {info && <p className="card notice info" role="status">{info}</p>}
+        {me && push === 'off' && !hideAvisos && tab === 'list' && (
+          <div className="card promo">
+            <p><b>Avisos de nuevas partidas</b><br />Te avisamos en el móvil cuando alguien cree una. Es opcional y lo puedes quitar cuando quieras.</p>
+            <div className="promo-actions"><button className="btn-ghost" onClick={togglePush}>Activar avisos</button><button className="link" onClick={hidePromo}>Ahora no</button></div>
+          </div>
+        )}
         {me && tab === 'new' && <NewSession onCreate={create} />}
         {!me && tab === 'login' && <AuthScreen onRegistered={setFresh} />}
+        {me && tab === 'polls' && <EncuestasView me={me} polls={polls} status={pollStatus} refresh={refreshPolls} />}
         {me && tab === 'admin' && <AdminPanel session={session} me={me} />}
         {tab === 'list' && status === 'error' && (
           <div className="card empty"><p>No se pudieron cargar las partidas. Revisa la conexión.</p><button className="btn" onClick={refresh}>Reintentar</button></div>
@@ -391,7 +453,7 @@ export default function App() {
       <nav className="tabbar" aria-label="Navegación principal">
         {tabs.map(([k, label]) => (
           <button key={k} className={tab === k ? 'on' : ''} aria-current={tab === k ? 'page' : undefined} onClick={() => go(k)}>
-            <Icon d={ICONS[k]} /><span>{label}{k === 'list' && upcoming.length > 0 && <b className="badge">{upcoming.length}</b>}</span>
+            <Icon d={ICONS[k]} /><span>{label}{k === 'list' && upcoming.length > 0 && <b className="badge">{upcoming.length}</b>}{k === 'polls' && me && pendingPolls(polls, me.id) > 0 && <b className="badge">{pendingPolls(polls, me.id)}</b>}</span>
           </button>
         ))}
       </nav>
